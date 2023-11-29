@@ -338,7 +338,7 @@ def train():
         + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {training_args}")
-    logger.info("**********判断是否存在检查点**********")
+    logger.info("**********체크포인트가 존재하는지 판단**********")
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
@@ -355,10 +355,10 @@ def train():
     logger.info("**********set seed**********")
     set_seed(training_args.seed)
 
-    logger.info("**********装载数据集**********")
+    logger.info("**********load dataset**********")
     raw_datasets = _load_dataset(data_args, training_args, model_args)
 
-    logger.info("**********从模型装载config**********")
+    logger.info("**********load model config**********")
     config_kwargs = {
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
@@ -379,7 +379,7 @@ def train():
             config.update_from_string(model_args.config_overrides)
             logger.info(f"New config: {config}")
 
-    logger.info("**********装载tokenizer**********")
+    logger.info("**********load tokenizer**********")
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,
         "use_fast": model_args.use_fast_tokenizer,
@@ -399,7 +399,7 @@ def train():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    logger.info("**********使用Lora方式装载模型**********")
+    logger.info("**********Lora로 모델 로드**********")
     lora_config = LoraConfig(
         r=model_args.lora_r,
         lora_alpha=model_args.lora_alpha,
@@ -442,7 +442,7 @@ def train():
         logger.info(
             f"Training new model from scratch - Total size={n_params/2**20:.2f}M params")
 
-    logger.info("**********调整嵌入的大小**********")
+    logger.info("**********임베딩 크기 조정**********")
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small lora_configvocab and want a smaller embedding size, remove this test.
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -513,7 +513,7 @@ def train():
         return tokenized_full_prompt
 
     tokenized_datasets = raw_datasets.map(generate_and_tokenize_prompt)
-    logger.info("**********校验数据集**********")
+    logger.info("**********데이터셋 검증**********")
     if data_args.block_size is None:
         block_size = tokenizer.model_max_length
         if block_size > 2048:
@@ -558,7 +558,7 @@ def train():
             preds = preds[:, :-1].reshape(-1)
             return metric.compute(predictions=preds, references=labels)
         # layer_norm_names=[]
-    logger.info("**********peft处理model**********")
+    logger.info("**********get peft model**********")
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     special_tokens_dict = dict()
@@ -575,7 +575,7 @@ def train():
         tokenizer=tokenizer,
         model=model,
     )
-    logger.info("**********初始化训练器**********")
+    logger.info("**********set Trainer**********")
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -592,7 +592,7 @@ def train():
             model, PeftModel) else None),
     )
 
-    logger.info("**********开始训练**********")
+    logger.info("*********start train**********")
     if training_args.do_train:
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
@@ -634,7 +634,7 @@ def train():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-    logger.info("**********开始评估**********")
+    logger.info("**********start evaluation**********")
     if training_args.do_eval:
         metrics = trainer.evaluate()
 

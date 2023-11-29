@@ -1,86 +1,85 @@
-# 用Lora和deepspeed微调LLaMA2-Chat
+# Lora와 deepspeed를 사용하여 LLaMA2-Chat 미세 조정하기
 
-在两块P100（16G）上微调Llama-2-7b-chat模型。
+두 개의 P100 (16G)에서 Llama-2-7b-chat 모델을 미세 조정합니다.
 
-数据源采用了alpaca格式，由train和validation两个数据源组成。
+데이터 소스는 train과 validation 두 가지 데이터 소스로 구성된 alpaca 형식을 사용했습니다.
 
-## 1、显卡要求
+## 1. 그래픽 카드 요구 사항
 
-16G显存及以上（P100或T4及以上），一块或多块。
+16GB 이상의 메모리를 가진 그래픽 카드 (P100 또는 T4 이상), 하나 이상.
 
-## 2、Clone源码
+## 2. 소스 코드 클론하기
 
 ```bash
-git clone https://github.com/git-cloner/llama2-lora-fine-tuning
+git clone https://github.com/KwanYongLEE/llama2-lora-fine-tuning
 cd llama2-lora-fine-tuning
 ```
 
-## 3、安装依赖环境
+## 3. 종속성 환경 설치하기
 
 ```bash
-# 创建虚拟环境
+# 가상 환경 생성하기
 conda create -n llama2 python=3.9 -y
 conda activate llama2
-# 下载github.com上的依赖资源（需要反复试才能成功，所以单独安装）
+# github.com에서의 의존성 리소스 다운로드하기 (성공할 때까지 반복해야 하므로 따로 설치함)
 export GIT_TRACE=1
 export GIT_CURL_VERBOSE=1
 pip install git+https://github.com/PanQiWei/AutoGPTQ.git -i https://pypi.mirrors.ustc.edu.cn/simple --trusted-host=pypi.mirrors.ustc.edu.cn
 pip install git+https://github.com/huggingface/peft -i https://pypi.mirrors.ustc.edu.cn/simple
 pip install git+https://github.com/huggingface/transformers -i https://pypi.mirrors.ustc.edu.cn/simple
-# 安装其他依赖包
+# 다른 종속성 패키지 설치하기
 pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple
-# 验证bitsandbytes
+# bitsandbytes 검증하기
 python -m bitsandbytes
 ```
 
-## 4、下载原始模型
+## 4. 원래 모델 다운로드하기
 
 ```bash
-python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
+python model_download.py --repo_id beomi/llama-2-koen-13b
 ```
 
-## 5、扩充中文词表
+## 5. 중국어 토큰 어휘 확장하기
 
 ```bash
-# 使用了https://github.com/ymcui/Chinese-LLaMA-Alpaca.git的方法扩充中文词表
-# 扩充完的词表在merged_tokenizes_sp（全精度）和merged_tokenizer_hf（半精度）
-# 在微调时，将使用--tokenizer_name ./merged_tokenizer_hf参数
+# https://github.com/ymcui/Chinese-LLaMA-Alpaca.git 의 방법을 사용하여 중국어 토큰 어휘를 확장했습니다.
+# 확장된 토큰 어휘는 merged_tokenizes_sp(전체 정밀도)와 merged_tokenizer_hf(반정밀도)에 있습니다.
+# 미세 조정 시 --tokenizer_name ./merged_tokenizer_hf 매개변수를 사용합니다.
 python merge_tokenizers.py \
-  --llama_tokenizer_dir ./models/daryl149/llama-2-7b-chat-hf \
+  --llama_tokenizer_dir ./models/beomi/llama-2-koen-13b \
   --chinese_sp_model_file ./chinese_sp.model
 ```
 
-## 6、微调参数说明
+## 6. 미세 조정 매개변수 설명
 
-有以下几个参数可以调整：
+다음 매개변수를 조정할 수 있습니다:
 
-| 参数                        | 说明                       | 取值                                                         |
-| --------------------------- | -------------------------- | ------------------------------------------------------------ |
-| load_in_bits                | 模型精度                   | 4和8，如果显存不溢出，尽量选高精度8                          |
-| block_size                  | token最大长度              | 首选2048，内存溢出，可选1024、512等                          |
-| per_device_train_batch_size | 训练时每块卡每次装入批量数 | 只要内存不溢出，尽量往大选                                   |
-| per_device_eval_batch_size  | 评估时每块卡每次装入批量数 | 只要内存不溢出，尽量往大选                                   |
-| include                     | 使用的显卡序列             | 如两块：localhost:1,2（特别注意的是，序列与nvidia-smi看到的不一定一样） |
-| num_train_epochs            | 训练轮数                   | 至少3轮                                                      |
+| 매개변수                     | 설명                     | 값                                                           |
+| ---------------------------- | ------------------------ | ------------------------------------------------------------ |
+| load_in_bits                 | 모델 정밀도              | 4와 8, 메모리가 넘치지 않는다면 가능한 높은 정밀도 8을 선택 |
+| block_size                   | token 최대 길이          | 우선 2048, 메모리 오버플로우 시 선택할 수 있음 1024, 512 등 |
+| per_device_train_batch_size  | 훈련 시 각 장치당 배치 크기 | 메모리가 넘치지 않는다면 가능한 크게 선택                   |
+| per_device_eval_batch_size   | 평가 시 각 장치당 배치 크기 | 메모리가 넘치지 않는다면 가능한 크게 선택                   |
+| include                      | 사용된 그래픽 카드 시퀀스 | 두 개인 경우: localhost:1,2 (nvidia-smi에서 본 것과 동일하지 않을 수 있음) |
+| num_train_epochs             | 훈련 에포크 횟수         | 최소 3회                                                     |
 
-## 7、微调
+## 7. 미세 조정하기
 
 ```bash
 chmod +x finetune-lora.sh
-# 微调
+# 미세 조정하기
 ./finetune-lora.sh
-# 微调（后台运行）
+# 백그라운드에서 미세 조정하기
 pkill -9 -f finetune-lora
 nohup ./finetune-lora.sh > train.log  2>&1 &
 tail -f train.log
 ```
 
-## 8、测试
+## 8. 테스트하기
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python generate.py \
     --base_model './models/daryl149/llama-2-7b-chat-hf' \
     --lora_weights 'output/checkpoint-2000' \
-    --load_8bit #不加这个参数是用的4bit
+    --load_8bit # 이 매개변수를 추가하지 않으면 4bit를 사용합니다
 ```
-
